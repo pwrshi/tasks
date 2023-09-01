@@ -1,0 +1,43 @@
+---
+- name: Configure SSH access
+  hosts: target-1
+  become: true
+
+  vars:
+    login: 'cloudru'
+    password: 'cloudpass'
+    ssh_key: "{{ lookup('file', 'key.pub') }}"
+
+  tasks:
+    - name: Create user
+      user:
+        name: '{{ login }}'
+        password: "{{ password | password_hash('sha512') }}"
+        createhome: true
+
+    - name: Allow SSH key authentication
+      authorized_key:
+        user: '{{ login }}'
+        state: present
+        key: '{{ ssh_key }}'
+
+    - name: Copy SSH key for user
+      copy:
+        content: '{{ ssh_key }}'
+        dest: '/home/{{ login }}/.ssh/authorized_keys'
+        owner: '{{ login }}'
+        group: '{{ login }}'
+        mode: '0600'
+    - name: Disable root SSH login
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^PermitRootLogin'
+        line: 'PermitRootLogin no'
+      notify:
+        - restart sshd
+
+  handlers:
+    - name: restart sshd
+      service:
+        name: sshd
+        state: restarted
